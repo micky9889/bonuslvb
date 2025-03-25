@@ -1,24 +1,26 @@
 <template>
   <div class="container" v-loading.fullscreen.lock="loading">
-    <h1>Bonus</h1>
+    <h1  class="bonus-header">Bonus</h1>
 
     <!-- Filter Form -->
     <el-form :inline="false" class="filter-form">
       <div style="margin-top: 10px; display: flex; gap: 10px">
         <el-form-item label="Search" label-position="top">
-          <!-- Only show input if the selected filter is not 'Status' or 'Branch Code' -->
-          <el-input
-            v-if="selectedFilter !== 'STATUS' && selectedFilter !== 'BRANCH_CODE'"
+          <!-- Show month picker for 'Month' filter -->
+          <el-date-picker
+            v-if="selectedFilter === 'MONTH_TX'"
             v-model="searchQuery"
-            clearable
-            @clear="resetFilter"
-            placeholder="Enter search value"
+            type="month"
+            format="YYYYMM"
+            value-format="YYYYMM"
+            placeholder="Select Month"
             style="width: 200px"
-          ></el-input>
-
+            clearable
+            @change="handleMonthChange"
+          ></el-date-picker>
           <!-- Show 'Status' filter select -->
           <el-select
-            v-if="selectedFilter === 'STATUS'"
+            v-else-if="selectedFilter === 'STATUS'"
             v-model="searchQuery"
             placeholder="Select Status"
             style="width: 200px"
@@ -29,7 +31,7 @@
 
           <!-- Show 'Branch Code' filter select -->
           <el-select
-            v-if="selectedFilter === 'BRANCH_CODE'"
+            v-else-if="selectedFilter === 'BRANCH_CODE'"
             v-model="searchQuery"
             placeholder="Select Branch Code"
             style="width: 200px"
@@ -41,6 +43,15 @@
               :value="branch.BRANCH"
             ></el-option>
           </el-select>
+          <!-- Show input for other filters -->
+          <el-input
+            v-else
+            v-model="searchQuery"
+            clearable
+            @clear="resetFilter"
+            placeholder="Enter search value"
+            style="width: 200px"
+          ></el-input>
         </el-form-item>
 
         <el-form-item label="Filter By" label-position="top">
@@ -53,14 +64,14 @@
             <el-option label="Month" value="MONTH_TX"></el-option>
             <!-- <el-option label="Employee ID" value="EMP_ID"></el-option> -->
             <el-option label="Account No" value="ACC_NO"></el-option>
-            <el-option label="Branch Code" value="BRANCH_CODE"></el-option>
-            <el-option label="User ID" value="USER_ID"></el-option>
+            <!-- <el-option label="Branch Code" value="BRANCH_CODE"></el-option> -->
+            <!-- <el-option label="User ID" value="USER_ID"></el-option> -->
             <el-option label="Status" value="STATUS"></el-option>
           </el-select>
         </el-form-item>
       </div>
 
-      <el-button type="primary" style="margin-top: 20px" @click="openDialog">New</el-button>
+      <el-button type="primary" style="margin-top: 20px" @click="openDialog">+</el-button>
     </el-form>
 
     <!-- Table -->
@@ -86,14 +97,18 @@
       <el-table-column label="Branch Code" prop="BRANCH_CODE"></el-table-column>
       <el-table-column label="Department ID" prop="EMP_DEP_ID"></el-table-column>
       <el-table-column label="User ID" prop="USER_ID"></el-table-column>
-      <el-table-column label="Status" prop="STATUS"></el-table-column>
+      <el-table-column label="Status" prop="STATUS">
+        <template #default="scope">
+          <el-tag :type="scope.row.STATUS === 'N' ? 'primary' : 'danger'">{{
+            scope.row.STATUS === 'N' ? 'Normal' : 'Inactive'
+          }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="Create Date" prop="CREATE_DATE"></el-table-column>
       <el-table-column label="Bonus Type" prop="BONUSTYPE"></el-table-column>
       <el-table-column fixed="right" label="Action" min-width="60">
         <template #default="scope">
-          <el-button link type="primary" size="small" @click="handleEdit(scope.row)"
-            >edit</el-button
-          >
+          <el-button :icon="Edit" circle type="primary" @click="handleEdit(scope.row)"></el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -112,10 +127,15 @@
     <!-- Dialog for New Bonus -->
     <el-dialog
       v-model="isDialogVisible"
-      :title="isEditMode ? 'Edit Bonus' : 'Add New Bonus'"
       width="600px"
       @close="closeDialog"
     >
+    <template #header>
+    <h2 class="dialog-title">
+      {{ isEditMode ? 'Edit Bonus' : 'Upload Bonus' }}
+    </h2>
+  </template>
+
       <el-form label-width="120px">
         <el-form-item label="Month">
           <el-date-picker
@@ -127,25 +147,31 @@
             :disabled="isEditMode"
           />
         </el-form-item>
-        <el-form-item label="Account No">
-          <!-- <el-input v-model="newBonus.ACC_NO" placeholder="will be select"></el-input> -->
-          <el-autocomplete
-            v-model="newBonus.ACC_NO"
-            :fetch-suggestions="querySearch"
-            placeholder="Select acc no"
-            style="width: 200px"
-            :debounce="300"
-            clearable
-            :trigger-on-focus="true"
-            @select="selectAccno"
-            :disabled="isEditMode"
+
+        <el-form-item label="Upload Excel" v-if="!isEditMode">
+          <el-upload
+            drag
+            accept=".xlsx, .xls"
+            :auto-upload="false"
+            :on-change="handleFileUpload"
+            :file-list="fileList"
           >
-            <template #default="{ item }">
-              <div>{{ item.EMP_FULLNAME }} - {{ item.EMP_ACCOUNT_LAK }}</div>
+            <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+            <div class="el-upload__text">Drop file here or <em>click to upload</em></div>
+            <template #tip>
+              <div class="el-upload__tip">Excel files only (.xlsx, .xls)</div>
             </template>
-          </el-autocomplete>
+          </el-upload>
         </el-form-item>
-        <el-form-item label="Amount">
+
+        <el-form-item label="ACC NO" v-if="isEditMode">
+          <el-input
+            v-model="newBonus.ACC_NO"
+            placeholder="Enter acc no"
+            :disabled="isEditMode"
+          ></el-input>
+        </el-form-item>
+        <el-form-item label="Amount" v-if="isEditMode">
           <el-input
             v-model="newBonus.AMOUNT"
             placeholder="Enter amount"
@@ -154,17 +180,21 @@
             :disabled="isEditMode"
           ></el-input>
         </el-form-item>
-        <el-form-item label="Tax Amount">
+        <el-form-item label="Tax Amount" v-if="isEditMode">
           <el-input
             v-model="newBonus.TAX_AMOUNT"
+            placeholder="Enter tax"
             :formatter="(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
             @input="validateTaxAmount"
-            placeholder="Enter tax amount"
             :disabled="isEditMode"
           ></el-input>
         </el-form-item>
         <el-form-item label="Bonus Describe">
-          <el-input v-model="newBonus.BONUS_DESC" placeholder="Enter bonus desc" :disabled="isEditMode"></el-input>
+          <el-input
+            v-model="newBonus.BONUS_DESC"
+            placeholder="Enter bonus desc"
+            :disabled="isEditMode"
+          ></el-input>
         </el-form-item>
         <el-form-item label="Status" v-if="isEditMode">
           <el-select v-model="updateStatus" placeholder="Select Status" style="width: 200px">
@@ -176,7 +206,9 @@
 
       <template #footer>
         <el-button @click="closeDialog">Cancel</el-button>
-        <el-button type="primary" @click="submitBonus">Submit</el-button>
+        <el-button type="primary" @click="submitBonus" :loading="loading">{{
+          isEditMode ? 'Update' : 'Create'
+        }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -185,7 +217,12 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
+import * as XLSX from 'xlsx' // Import xlsx library
+import { Edit, UploadFilled } from '@element-plus/icons-vue'
+import { useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
 
+const route = useRoute()
 const ApiUrl = import.meta.env.VITE_API_URL
 const selectedFilter = ref('MONTH_TX') // Default filter field
 const searchQuery = ref('')
@@ -210,31 +247,56 @@ const newBonus = ref({
   AMOUNT: '',
   TAX_AMOUNT: '',
   BONUS_DESC: '',
-  USER_ID: 'SOUKSAN',
+  USER_ID: '',
 })
 const isEditMode = ref(false) // New flag to track edit mode
 const updateStatus = ref(null)
 
 const loading = ref(false)
+const fileList = ref([]) // To store uploaded file list
+// Store Excel data separately from newBonus
+const excelData = ref([])
+const nameUSER = ref('')
+const currentMonthTx = ref('')
 
 onMounted(() => {
   fetchData()
   fetchAllBranch()
   fetchAccNo()
+  currentMonth()
+
+  //get value params
+  nameUSER.value = route.query.nameUSER
+
+  if (nameUSER.value) {
+    // console.log('nameUSER:', nameUSER.value) // e.g., "mick"
+    // Use the values as needed, e.g., set them in your form
+    newBonus.value.USER_ID = nameUSER.value // Example usage
+  }
 })
+
+//current month
+const currentMonth = () => {
+  const currentDate = new Date()
+  const year = currentDate.getFullYear()
+  const month = String(currentDate.getMonth() + 1).padStart(2, '0') // Months are 0-based, so add 1
+  currentMonthTx.value = `${year}${month}`
+  searchQuery.value = currentMonthTx.value
+  newBonus.value.MONTH_TX = currentMonthTx.value
+}
 //fetch data
 const fetchData = async () => {
   loading.value = true
   try {
     const body = {
-      MONTH_TX: '',
+      MONTH_TX: searchQuery.value, //currentMonthTx.value
       ACC_NO: '',
       AMOUNT: '',
       TAX_AMOUNT: '',
       BONUS_DESC: '',
       BRANCH_CODE: '',
       EMP_DEP_ID: '',
-      USER_ID: '',
+      USER_ID: nameUSER.value || route.query.nameUSER,
       STATUS: '',
     }
     const response = await axios.post(ApiUrl + '/Procedure/SLR_OTHER_BONUS_READ', body, {
@@ -245,12 +307,17 @@ const fetchData = async () => {
     })
     if (response.data.HEADER.ERROR_CODE === '00') {
       originalData.value = response.data.BODY
+      console.log('Fetched data:', originalData.value)
     } else originalData.value = []
   } catch (error) {
     console.error('Error fetching data:', error)
   } finally {
     loading.value = false
   }
+}
+const handleMonthChange = async(value) => {
+  searchQuery.value = value // Value is already in YYYYMM format due to value-format
+  await fetchData()
 }
 //filter data
 const filteredData = computed(() => {
@@ -297,7 +364,7 @@ const fetchAllBranch = async () => {
         'Content-Type': 'application/json',
       },
     })
-    console.log('branch', response)
+    // console.log('branch', response)
 
     if (response.data.HEADER.ERROR_CODE === '00') {
       branchData.value = response.data.BODY
@@ -318,7 +385,7 @@ const fetchAccNo = async () => {
         'Content-Type': 'application/json',
       },
     })
-    console.log('accno', response)
+    // console.log('accno', response)
 
     if (response.data.HEADER.ERROR_CODE === '00') {
       accNoData.value = response.data.BODY
@@ -327,24 +394,12 @@ const fetchAccNo = async () => {
     console.error('Error fetching Acc_no:', error)
   }
 }
-//filter autocomplate
-const querySearch = (queryString, cb) => {
-  const results = queryString
-    ? accNoData.value.filter((item) => {
-        return (
-          item.EMP_FULLNAME.toLowerCase().includes(queryString.toLowerCase()) ||
-          item.EMP_ACCOUNT_LAK.includes(queryString)
-        )
-      })
-    : accNoData.value
-  cb(results)
-}
-const selectAccno = (selectedItem) => {
-  console.log('Selected Account:', selectedItem)
-  newBonus.value.ACC_NO = selectedItem.EMP_ACCOUNT_LAK
-}
+
 // Formattera number
 const formatAmount = (row, column, cellValue) => {
+  if (cellValue === '0' || !cellValue) {
+    return '-' // Return dash if AMOUNT is '0' or 0
+  }
   return cellValue ? new Intl.NumberFormat().format(cellValue) : ''
 }
 const formatMonth = (row, column, cellValue) => {
@@ -365,40 +420,77 @@ const closeDialog = () => {
   isDialogVisible.value = false
   isEditMode.value = false
   updateStatus.value = null
+  fileList.value = [] // Reset file list
+  excelData.value = [] // Reset Excel data
   newBonus.value = {
-    MONTH_TX: '',
+    MONTH_TX: currentMonthTx.value,
     ACC_NO: '',
     AMOUNT: '',
     TAX_AMOUNT: '',
     BONUS_DESC: '',
-    USER_ID: '',
+    USER_ID: nameUSER.value, 
   }
 }
 // Submit Bonus
 const submitBonus = async () => {
   loading.value = true
-  console.log('body=', newBonus.value)
   try {
-    let endpoint = '/Procedure/SLR_OTHER_BONUS_CREATE'
+    // Handle edit mode as before
     if (isEditMode.value) {
-      endpoint = '/Procedure/SLR_OTHER_BONUS_UPDATE' // Assuming you have an update endpoint
-      // Add the identifier to the payload if needed
+      const endpoint = '/Procedure/SLR_OTHER_BONUS_UPDATE'
       newBonus.value.STATUS = updateStatus.value
+      const response = await axios.post(ApiUrl + endpoint, newBonus.value, {
+        headers: { DB: 'SALARY', 'Content-Type': 'application/json' },
+      })
+
+      if (response.data.HEADER.ERROR_CODE === '00') {
+        await fetchData()
+        searchQuery.value = newBonus.value.MONTH_TX
+        await handleMonthChange(newBonus.value.MONTH_TX)
+        closeDialog()
+        ElMessage.success('updated success!')
+      } else ElMessage.success(response.data.HEADER.ERROR_DESC)
     }
+    // Handle create mode with Excel data
+    else {
+      if (!newBonus.value.MONTH_TX || excelData.value.length === 0) {
+        ElMessage.error('Month and File are required')
+        return
+      }
+      // console.log('exceldata=', excelData.value.length)
+      else {
+        // Loop through Excel data and submit each row
+        const endpoint = '/Procedure/SLR_OTHER_BONUS_CREATE'
+        for (const row of excelData.value) {
+          const bonusData = {
+            MONTH_TX: newBonus.value.MONTH_TX,
+            ACC_NO: "01000210385228",//String(row.EMP_ACCOUNT_LAK),
+            AMOUNT: row.AMOUNT || '0',
+            TAX_AMOUNT: row.TAX_AMOUNT || '0',
+            BONUS_DESC: newBonus.value.BONUS_DESC,
+            USER_ID: newBonus.value.USER_ID,
+          }
+          // console.log('bodycreate=', bonusData)
+          try {
+            const response = await axios.post(ApiUrl + endpoint, bonusData, {
+              headers: { DB: 'SALARY', 'Content-Type': 'application/json' },
+            })
 
-    const response = await axios.post(ApiUrl + endpoint, newBonus.value, {
-      headers: { DB: 'SALARY', 'Content-Type': 'application/json' },
-    })
-    console.log('response', response.data)
-
-    if (response.data.HEADER.ERROR_CODE === '00') {
-      fetchData()
-      closeDialog()
-    } else {
-      console.error(
-        `Failed to ${isEditMode.value ? 'update' : 'create'} bonus:`,
-        response.data.HEADER.ERROR_MESSAGE,
-      )
+            if (response.data.HEADER.ERROR_CODE === '00') {
+              ElMessage.success('upload success')
+            } else if (response.data.HEADER.ERROR_CODE !== '00') {
+              ElMessage.error(response.data.HEADER.ERROR_DESC)
+            } else ElMessage.error(response.data.HEADER.ERROR_DESC)
+          } catch (error) {
+            console.error(`Error submitting bonus for:`, error)
+          }
+        }
+        // Refresh data and close dialog after all submissions
+        await fetchData()
+        searchQuery.value = newBonus.value.MONTH_TX
+        await handleMonthChange(newBonus.value.MONTH_TX)
+        closeDialog()
+      }
     }
   } catch (error) {
     console.error(`Error ${isEditMode.value ? 'updating' : 'submitting'} bonus:`, error)
@@ -418,6 +510,7 @@ const validateTaxAmount = (value) => {
 const handleEdit = (row) => {
   isEditMode.value = true
   isDialogVisible.value = true
+  // console.log('edit', row)
 
   // Populate newBonus with the row data
   newBonus.value = {
@@ -431,6 +524,29 @@ const handleEdit = (row) => {
     // Add any other fields that might be needed for editing
   }
   updateStatus.value = row.STATUS
+}
+
+// Add new method to handle file upload
+const handleFileUpload = (file) => {
+  const reader = new FileReader()
+
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result)
+      const workbook = XLSX.read(data, { type: 'array' })
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
+
+      // Convert sheet to JSON and store all rows
+      excelData.value = XLSX.utils.sheet_to_json(firstSheet)
+      // console.log('row=', excelData.value)
+    } catch (error) {
+      console.error('Error reading Excel file:', error)
+      // You might want to show an error message to the user here
+    }
+  }
+
+  reader.readAsArrayBuffer(file.raw)
+  fileList.value = [file] // Update file list
 }
 </script>
 
@@ -461,5 +577,25 @@ const handleEdit = (row) => {
   margin-top: 15px;
   display: flex;
   justify-content: center;
+}
+.el-upload__tip {
+  margin-top: 8px;
+  color: #666060;
+}
+.bonus-header {
+  font-size: 2rem; /* ปรับขนาดใหญ่ */
+  font-weight: bold; /* ทำให้ตัวหนา */
+  text-transform: uppercase; /* เปลี่ยนเป็นตัวพิมพ์ใหญ่ */
+  border-left: 5px solid #1d87f8; /* เส้นขีดซ้าย */
+  padding-left: 10px; /* เพิ่มระยะห่างระหว่างเส้นกับข้อความ */
+  line-height: 1; /* ป้องกันเส้นสูงเกินไป */
+}
+.dialog-title{
+  font-size: 1.2rem; /* ปรับขนาดใหญ่ */
+  font-weight: bold; /* ทำให้ตัวหนา */
+  text-transform: uppercase; /* เปลี่ยนเป็นตัวพิมพ์ใหญ่ */
+  border-left: 5px solid #1d87f8; /* เส้นขีดซ้าย */
+  padding-left: 10px; /* เพิ่มระยะห่างระหว่างเส้นกับข้อความ */
+  line-height: 1; /* ป้องกันเส้นสูงเกินไป */
 }
 </style>
