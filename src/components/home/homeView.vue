@@ -307,7 +307,7 @@ const fetchData = async () => {
     })
     if (response.data.HEADER.ERROR_CODE === '00') {
       originalData.value = response.data.BODY
-      console.log('Fetched data:', originalData.value)
+      // console.log('Fetched data:', originalData.value)
     } else originalData.value = []
   } catch (error) {
     console.error('Error fetching data:', error)
@@ -464,7 +464,7 @@ const submitBonus = async () => {
         for (const row of excelData.value) {
           const bonusData = {
             MONTH_TX: newBonus.value.MONTH_TX,
-            ACC_NO: "01000210385228",//String(row.EMP_ACCOUNT_LAK),
+            ACC_NO: String(row.EMP_ACCOUNT_LAK),
             AMOUNT: row.AMOUNT || '0',
             TAX_AMOUNT: row.TAX_AMOUNT || '0',
             BONUS_DESC: newBonus.value.BONUS_DESC,
