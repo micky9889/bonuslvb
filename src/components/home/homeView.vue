@@ -72,9 +72,8 @@
       :max-height="800"
       :scroll-x="true"
     >
-      <el-table-column label="#" type="index" :index="indexMethod" width="50"></el-table-column>
-      <el-table-column label="Month" prop="MONTH_TX" :formatter="formatMonth"></el-table-column>
-      <!-- <el-table-column label="Employee ID" prop="EMP_ID"></el-table-column> -->
+      <!-- <el-table-column label="#" type="index" :index="indexMethod" width="50"></el-table-column>
+        <el-table-column label="Month" prop="MONTH_TX" :formatter="formatMonth"></el-table-column>
       <el-table-column label="Account Number" prop="ACC_NO"></el-table-column>
       <el-table-column label="Amount" prop="AMOUNT" :formatter="formatAmount"></el-table-column>
       <el-table-column
@@ -94,7 +93,29 @@
         </template>
       </el-table-column>
       <el-table-column label="Create Date" prop="CREATE_DATE"></el-table-column>
-      <el-table-column label="Bonus Type" prop="BONUSTYPE"></el-table-column>
+      <el-table-column label="Bonus Type" prop="BONUSTYPE"></el-table-column> -->
+
+      <!-- Dynamic Columns -->
+      <el-table-column
+        v-for="col in columns"
+        :key="col.prop"
+        :prop="col.prop"
+        :label="col.label"
+        :width="col.width || 'auto'"
+        :formatter="col.formatter || defaultFormatter"
+      >
+        <template #default="scope">
+          <!-- Custom rendering for index -->
+          <span v-if="col.prop === 'index'">{{ indexMethod(scope.$index) }}</span>
+          <!-- Custom rendering for STATUS -->
+          <el-tag
+            v-else-if="col.prop === 'STATUS'"
+            :type="scope.row.STATUS === 'N' ? 'primary' : 'danger'"
+          >
+            {{ scope.row.STATUS === 'N' ? 'Normal' : 'Inactive' }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column fixed="right" label="Action" min-width="60">
         <template #default="scope">
           <el-button :icon="Edit" circle type="primary" @click="handleEdit(scope.row)"></el-button>
@@ -240,6 +261,7 @@ const fileList = ref([]) // To store uploaded file list
 const excelData = ref([])
 const nameUSER = ref('')
 const currentMonthTx = ref('')
+const columns = ref([]) // New reactive variable for dynamic columns
 
 onMounted(() => {
   currentMonth()
@@ -285,14 +307,103 @@ const fetchData = async () => {
     })
     if (response.data.HEADER.ERROR_CODE === '00') {
       originalData.value = response.data.BODY
+      setDynamicColumns(response.data.BODY) // Set columns based on response
       // console.log('Fetched data:', originalData.value)
-    } else originalData.value = []
+    } else {
+      originalData.value = []
+      columns.value = []
+    }
   } catch (error) {
     console.error('Error fetching data:', error)
   } finally {
     loading.value = false
   }
 }
+// Function to dynamically set columns based on response
+const setDynamicColumns = (data) => {
+  if (data.length === 0) {
+    columns.value = []
+    return
+  }
+  // Define custom label mappings
+  const customLabels = {
+    index: 'No.', // Custom name for the # column
+    MONTH_TX: 'Month', // Custom name for MONTH_TX
+    ACC_NO: 'Account No.', // Custom name for ACC_NO
+    AMOUNT: 'Amount', // Custom name for AMOUNT
+    TAX_AMOUNT: 'Tax Amount', // Custom name for TAX_AMOUNT
+    BONUS_DESC: 'Description', // Custom name for BONUS_DESC
+    BRANCH_CODE: 'Branch', // Custom name for BRANCH_CODE
+    EMP_DEP_ID: 'Dept ID', // Custom name for EMP_DEP_ID
+    USER_ID: 'User', // Custom name for USER_ID
+    STATUS: 'Active Status', // Custom name for STATUS
+    CREATE_DATE: 'Created On', // Custom name for CREATE_DATE
+    BONUSTYPE: 'Bonus Category', // Custom name for BONUSTYPE
+  }
+
+  // Get all unique keys from the first object (or all objects if needed)
+  const firstItem = data[0]
+  const dynamicColumns = Object.keys(firstItem).map((key) => {
+    return {
+      prop: key,
+      label: customLabels[key] || formatLabel(key), // Use custom label if defined, otherwise fallback to formatLabel
+      width: getColumnWidth(key), // Optional: Set width based on key
+      formatter: getColumnFormatter(key), // Optional: Assign formatter
+    }
+  })
+
+  // Set only the dynamic data columns (exclude '#')
+  // columns.value = dynamicColumns
+
+  columns.value = [
+    {
+      prop: 'index', // Use a dummy prop name
+      label: customLabels['index'] || '#', // Use custom label for index
+      width: '50',
+    },
+    ...dynamicColumns,
+  ]
+}
+
+// Helper to format column labels (e.g., EMP_FULLNAME -> Employee Fullname)
+const formatLabel = (key) => {
+  return key
+    .replace(/_/g, ' ')
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
+// Helper to assign width based on key (optional customization)
+const getColumnWidth = (key) => {
+  const widthMap = {
+    MONTH_TX: '100',
+    ACC_NO: '150',
+    AMOUNT: '120',
+    TAX_AMOUNT: '120',
+    BONUS_DESC: '200',
+    BRANCH_CODE: '120',
+    EMP_DEP_ID: '120',
+    USER_ID: '120',
+    STATUS: '100',
+    CREATE_DATE: '150',
+    BONUSTYPE: '120',
+  }
+  return widthMap[key] || 'auto'
+}
+
+// Helper to assign formatters based on key
+const getColumnFormatter = (key) => {
+  if (key === 'MONTH_TX') return formatMonth
+  if (key === 'AMOUNT' || key === 'TAX_AMOUNT') return formatAmount
+  return null // Default formatter will be applied if null
+}
+
+// Default formatter for unformatted columns
+const defaultFormatter = (row, column, cellValue) => {
+  return cellValue !== null && cellValue !== undefined ? cellValue : '-'
+}
+
 //handleMonthChange
 const handleMonthChange = async (value) => {
   searchQuery.value = '' // Value is already in YYYYMM format due to value-format
@@ -320,11 +431,7 @@ const filteredData = computed(() => {
     return false
   })
 })
-//reset
-const resetFilter = () => {
-  searchQuery.value = ''
-  monthFilter.value = currentMonthTx.value
-}
+
 //pagination
 const paginatedData = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value
