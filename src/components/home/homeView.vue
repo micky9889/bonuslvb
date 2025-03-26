@@ -1,15 +1,13 @@
 <template>
   <div class="container" v-loading.fullscreen.lock="loading">
-    <h1  class="bonus-header">Bonus</h1>
+    <h1 class="bonus-header">Other Bonus</h1>
 
     <!-- Filter Form -->
     <el-form :inline="false" class="filter-form">
       <div style="margin-top: 10px; display: flex; gap: 10px">
-        <el-form-item label="Search" label-position="top">
-          <!-- Show month picker for 'Month' filter -->
+        <el-form-item label="Month" label-position="top">
           <el-date-picker
-            v-if="selectedFilter === 'MONTH_TX'"
-            v-model="searchQuery"
+            v-model="monthFilter"
             type="month"
             format="YYYYMM"
             value-format="YYYYMM"
@@ -18,12 +16,16 @@
             clearable
             @change="handleMonthChange"
           ></el-date-picker>
+        </el-form-item>
+
+        <el-form-item label="Search" label-position="top">
           <!-- Show 'Status' filter select -->
           <el-select
-            v-else-if="selectedFilter === 'STATUS'"
+            v-if="selectedFilter === 'STATUS'"
             v-model="searchQuery"
             placeholder="Select Status"
             style="width: 200px"
+            clearable
           >
             <el-option label="Inactive" value="I"></el-option>
             <el-option label="Normal" value="N"></el-option>
@@ -35,6 +37,7 @@
             v-model="searchQuery"
             placeholder="Select Branch Code"
             style="width: 200px"
+            clearable
           >
             <el-option
               v-for="branch in branchData"
@@ -43,35 +46,21 @@
               :value="branch.BRANCH"
             ></el-option>
           </el-select>
-          <!-- Show input for other filters -->
-          <el-input
-            v-else
-            v-model="searchQuery"
-            clearable
-            @clear="resetFilter"
-            placeholder="Enter search value"
-            style="width: 200px"
-          ></el-input>
         </el-form-item>
-
         <el-form-item label="Filter By" label-position="top">
           <el-select
             v-model="selectedFilter"
             placeholder="Select Field"
             style="width: 150px"
-            @change="resetFilter"
+            @change="resetSearchQuery"
           >
-            <el-option label="Month" value="MONTH_TX"></el-option>
-            <!-- <el-option label="Employee ID" value="EMP_ID"></el-option> -->
-            <el-option label="Account No" value="ACC_NO"></el-option>
-            <!-- <el-option label="Branch Code" value="BRANCH_CODE"></el-option> -->
-            <!-- <el-option label="User ID" value="USER_ID"></el-option> -->
             <el-option label="Status" value="STATUS"></el-option>
+            <el-option label="Branch Code" value="BRANCH_CODE"></el-option>
           </el-select>
         </el-form-item>
       </div>
 
-      <el-button type="primary" style="margin-top: 20px" @click="openDialog">+</el-button>
+      <el-button type="primary" style="margin-top: 20px" @click="openDialog">+ upload</el-button>
     </el-form>
 
     <!-- Table -->
@@ -125,16 +114,12 @@
       @size-change="handleSizeChange"
     ></el-pagination>
     <!-- Dialog for New Bonus -->
-    <el-dialog
-      v-model="isDialogVisible"
-      width="600px"
-      @close="closeDialog"
-    >
-    <template #header>
-    <h2 class="dialog-title">
-      {{ isEditMode ? 'Edit Bonus' : 'Upload Bonus' }}
-    </h2>
-  </template>
+    <el-dialog v-model="isDialogVisible" width="600px" @close="closeDialog">
+      <template #header>
+        <h2 class="dialog-title">
+          {{ isEditMode ? 'Edit Other Bonus' : 'Upload Other Bonus' }}
+        </h2>
+      </template>
 
       <el-form label-width="120px">
         <el-form-item label="Month">
@@ -146,6 +131,12 @@
             placeholder="Choose a month"
             :disabled="isEditMode"
           />
+        </el-form-item>
+
+        <el-form-item label="Form" v-if="!isEditMode">
+          <el-button plain type="success" @click="downloadFormExcel" :loading="loading">
+            <el-icon><Download /></el-icon>&nbsp;Excel
+          </el-button>
         </el-form-item>
 
         <el-form-item label="Upload Excel" v-if="!isEditMode">
@@ -207,7 +198,7 @@
       <template #footer>
         <el-button @click="closeDialog">Cancel</el-button>
         <el-button type="primary" @click="submitBonus" :loading="loading">{{
-          isEditMode ? 'Update' : 'Create'
+          isEditMode ? 'Update' : 'Upload'
         }}</el-button>
       </template>
     </el-dialog>
@@ -218,28 +209,20 @@
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import * as XLSX from 'xlsx' // Import xlsx library
-import { Edit, UploadFilled } from '@element-plus/icons-vue'
+import { Download, Edit, UploadFilled } from '@element-plus/icons-vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
-const route = useRoute()
 const ApiUrl = import.meta.env.VITE_API_URL
-const selectedFilter = ref('MONTH_TX') // Default filter field
+const route = useRoute()
+const monthFilter = ref('')
+const selectedFilter = ref('STATUS') // Default filter field
 const searchQuery = ref('')
-
-const originalData = ref([
-  /* Your data here */
-])
-const branchData = ref([
-  /* Your data here */
-])
-const accNoData = ref([
-  /* Your data here */
-])
-
+const originalData = ref([])
+const branchData = ref([])
+const accNoData = ref([])
 const currentPage = ref(1)
 const pageSize = ref(10)
-
 const isDialogVisible = ref(false)
 const newBonus = ref({
   MONTH_TX: '',
@@ -260,18 +243,14 @@ const nameUSER = ref('')
 const currentMonthTx = ref('')
 
 onMounted(() => {
+  currentMonth()
   fetchData()
   fetchAllBranch()
-  fetchAccNo()
-  currentMonth()
 
   //get value params
   nameUSER.value = route.query.nameUSER
-
   if (nameUSER.value) {
-    // console.log('nameUSER:', nameUSER.value) // e.g., "mick"
-    // Use the values as needed, e.g., set them in your form
-    newBonus.value.USER_ID = nameUSER.value // Example usage
+    newBonus.value.USER_ID = nameUSER.value
   }
 })
 
@@ -281,7 +260,7 @@ const currentMonth = () => {
   const year = currentDate.getFullYear()
   const month = String(currentDate.getMonth() + 1).padStart(2, '0') // Months are 0-based, so add 1
   currentMonthTx.value = `${year}${month}`
-  searchQuery.value = currentMonthTx.value
+  monthFilter.value = currentMonthTx.value
   newBonus.value.MONTH_TX = currentMonthTx.value
 }
 //fetch data
@@ -289,15 +268,15 @@ const fetchData = async () => {
   loading.value = true
   try {
     const body = {
-      MONTH_TX: searchQuery.value, //currentMonthTx.value
+      MONTH_TX: monthFilter.value,
       ACC_NO: '',
       AMOUNT: '',
       TAX_AMOUNT: '',
       BONUS_DESC: '',
-      BRANCH_CODE: '',
+      BRANCH_CODE: selectedFilter.value === 'BRANCH_CODE' ? searchQuery.value : '',
       EMP_DEP_ID: '',
       USER_ID: nameUSER.value || route.query.nameUSER,
-      STATUS: '',
+      STATUS: selectedFilter.value === 'STATUS' ? searchQuery.value : '',
     }
     const response = await axios.post(ApiUrl + '/Procedure/SLR_OTHER_BONUS_READ', body, {
       headers: {
@@ -315,14 +294,26 @@ const fetchData = async () => {
     loading.value = false
   }
 }
-const handleMonthChange = async(value) => {
-  searchQuery.value = value // Value is already in YYYYMM format due to value-format
+//handleMonthChange
+const handleMonthChange = async (value) => {
+  searchQuery.value = '' // Value is already in YYYYMM format due to value-format
+  monthFilter.value = value
   await fetchData()
 }
-//filter data
+// New reset function for searchQuery only
+const resetSearchQuery = () => {
+  searchQuery.value = ''
+}
+// filteredData
 const filteredData = computed(() => {
-  if (!searchQuery.value) return originalData.value
-  return originalData.value.filter((item) => {
+  let filtered = originalData.value.filter((item) => {
+    if (!monthFilter.value) return true
+    return String(item.MONTH_TX) === monthFilter.value
+  })
+
+  if (!searchQuery.value || !selectedFilter.value) return filtered
+
+  return filtered.filter((item) => {
     const fieldValue = item[selectedFilter.value]
     if (fieldValue !== undefined) {
       return String(fieldValue).toLowerCase().includes(searchQuery.value.toLowerCase())
@@ -333,6 +324,7 @@ const filteredData = computed(() => {
 //reset
 const resetFilter = () => {
   searchQuery.value = ''
+  monthFilter.value = currentMonthTx.value
 }
 //pagination
 const paginatedData = computed(() => {
@@ -373,27 +365,6 @@ const fetchAllBranch = async () => {
     console.error('Error fetching branch:', error)
   }
 }
-//fetch All acc no
-const fetchAccNo = async () => {
-  try {
-    const body = {
-      BRANCH: '',
-    }
-    const response = await axios.post(ApiUrl + '/Procedure/SLR_OTHER_BONUS_FORM_READ', body, {
-      headers: {
-        DB: 'SALARY',
-        'Content-Type': 'application/json',
-      },
-    })
-    // console.log('accno', response)
-
-    if (response.data.HEADER.ERROR_CODE === '00') {
-      accNoData.value = response.data.BODY
-    } else accNoData.value = []
-  } catch (error) {
-    console.error('Error fetching Acc_no:', error)
-  }
-}
 
 // Formattera number
 const formatAmount = (row, column, cellValue) => {
@@ -428,11 +399,23 @@ const closeDialog = () => {
     AMOUNT: '',
     TAX_AMOUNT: '',
     BONUS_DESC: '',
-    USER_ID: nameUSER.value, 
+    USER_ID: nameUSER.value,
   }
 }
 // Submit Bonus
 const submitBonus = async () => {
+  // Show confirmation popup
+  await ElMessageBox.confirm(
+    isEditMode.value
+      ? 'Are you sure you want to update the bonus form?'
+      : 'Are you sure you want to Upload the bonus form?',
+    isEditMode.value ? 'Confirm Update' : 'Confirm Upload',
+    {
+      confirmButtonText: 'Yes',
+      cancelButtonText: 'No',
+      type: 'warning',
+    },
+  )
   loading.value = true
   try {
     // Handle edit mode as before
@@ -445,7 +428,7 @@ const submitBonus = async () => {
 
       if (response.data.HEADER.ERROR_CODE === '00') {
         await fetchData()
-        searchQuery.value = newBonus.value.MONTH_TX
+        monthFilter.value = newBonus.value.MONTH_TX
         await handleMonthChange(newBonus.value.MONTH_TX)
         closeDialog()
         ElMessage.success('updated success!')
@@ -487,13 +470,19 @@ const submitBonus = async () => {
         }
         // Refresh data and close dialog after all submissions
         await fetchData()
-        searchQuery.value = newBonus.value.MONTH_TX
+        monthFilter.value = newBonus.value.MONTH_TX
         await handleMonthChange(newBonus.value.MONTH_TX)
         closeDialog()
       }
     }
   } catch (error) {
-    console.error(`Error ${isEditMode.value ? 'updating' : 'submitting'} bonus:`, error)
+    console.error(`Error ${isEditMode.value ? 'updating' : 'uploading'} bonus:`, error)
+    if (error === 'cancel') {
+      ElMessage.info('upload canceled')
+    } else {
+      console.error('Error upload form:', error)
+      ElMessage.error('Error upload form')
+    }
   } finally {
     loading.value = false
   }
@@ -548,6 +537,77 @@ const handleFileUpload = (file) => {
   reader.readAsArrayBuffer(file.raw)
   fileList.value = [file] // Update file list
 }
+
+// Download form Excel
+const downloadFormExcel = async () => {
+  // Show confirmation popup
+  await ElMessageBox.confirm(
+    'Are you sure you want to download the bonus form?',
+    'Confirm Download',
+    {
+      confirmButtonText: 'Yes',
+      cancelButtonText: 'No',
+      type: 'warning',
+    },
+  )
+  loading.value = true
+  try {
+    const body = {
+      BRANCH: 'SOUKSAN',
+    }
+    const response = await axios.post(ApiUrl + '/Procedure/SLR_OTHER_BONUS_FORM_READ', body, {
+      headers: {
+        DB: 'SALARY',
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (response.data.HEADER.ERROR_CODE === '00') {
+      const formData = response.data.BODY
+
+      // Map data to required columns
+      const templateData = formData.map((item) => ({
+        NO: item.NO,
+        EMP_FULLNAME: item.EMP_FULLNAME,
+        EMP_ACCOUNT_LAK: item.EMP_ACCOUNT_LAK,
+        AMOUNT: item.AMOUNT,
+        TAX_AMOUNT: item.TAX_AMOUNT,
+        DEP_NAME: item.DEP_NAME,
+      }))
+
+      // Create workbook and worksheet
+      const worksheet = XLSX.utils.json_to_sheet(templateData)
+      const workbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Bonus Form')
+
+      // Optional: Set column widths
+      worksheet['!cols'] = [
+        { wch: 5 }, // NO
+        { wch: 20 }, // EMP_FULLNAME
+        { wch: 20 }, // EMP_ACCOUNT_LAK
+        { wch: 15 }, // AMOUNT
+        { wch: 15 }, // TAX_AMOUNT
+        { wch: 30 }, // DEP_NAME
+      ]
+
+      // Download the file
+      const fileName = `Bonus_Form_${newBonus.value.MONTH_TX || currentMonthTx.value}.xlsx`
+      XLSX.writeFile(workbook, fileName)
+      ElMessage.success('Form downloaded successfully!')
+    } else {
+      ElMessage.error(response.data.HEADER.ERROR_DESC || 'Failed to fetch form data')
+    }
+  } catch (error) {
+    if (error === 'cancel') {
+      ElMessage.info('Download canceled')
+    } else {
+      console.error('Error downloading form:', error)
+      ElMessage.error('Error downloading form')
+    }
+  } finally {
+    loading.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -590,7 +650,7 @@ const handleFileUpload = (file) => {
   padding-left: 10px; /* เพิ่มระยะห่างระหว่างเส้นกับข้อความ */
   line-height: 1; /* ป้องกันเส้นสูงเกินไป */
 }
-.dialog-title{
+.dialog-title {
   font-size: 1.2rem; /* ปรับขนาดใหญ่ */
   font-weight: bold; /* ทำให้ตัวหนา */
   text-transform: uppercase; /* เปลี่ยนเป็นตัวพิมพ์ใหญ่ */
