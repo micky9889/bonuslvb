@@ -1,17 +1,6 @@
 <template>
   <div class="container" v-loading.fullscreen.lock="loading">
-
-      <!-- <h1 class="bonus-header">Other Bonus</h1> -->
-      <!-- <el-button type="danger" @click="goBackToOverview">
-        <el-icon><ArrowLeft /></el-icon> Back
-      </el-button> -->
-      <el-breadcrumb  :separator-icon="ArrowRight" style="font-size: 2rem; margin-bottom: 20px;">
-    <el-breadcrumb-item :to="homeRoute"><h1 class="bonus-header">Other Bonus</h1></el-breadcrumb-item>
-    <el-breadcrumb-item style="font-size: 2rem;">
-      detail
-    </el-breadcrumb-item>
-
-  </el-breadcrumb>
+    <h1 class="bonus-header" style=" margin-bottom: 20px;">Other Bonus</h1>
 
     <!-- Filter Form -->
     <el-form :inline="false" class="filter-form">
@@ -29,46 +18,18 @@
           ></el-date-picker>
         </el-form-item>
 
-        <el-form-item label="Search Name or Account" label-position="top">
+        <el-form-item label="Search" label-position="top">
           <el-input
-            v-model="nameAccountQuery"
-            placeholder="Name or Account..."
+            v-model="searchQuery"
+            placeholder="Search..."
             style="width: 200px"
             clearable
-            @input="handleNameAccountSearchChange"
+            @input="handleSearchChange"
           ></el-input>
         </el-form-item>
-
-        <el-form-item label="Search" label-position="top">
-          <!-- Show 'Branch Code' filter select -->
-          <!-- v-if="selectedFilter === 'BRANCH_CODE'" -->
-          <el-select
-            v-model="searchQuery"
-            placeholder="Select department"
-            style="width: 300px"
-            clearable
-          >
-            <el-option
-              v-for="branch in branchData"
-              :key="branch.DEP"
-              :label="branch.DEP_NAME"
-              :value="branch.DEP"
-            ></el-option>
-          </el-select>
-        </el-form-item>
-        <!-- <el-form-item label="Filter By" label-position="top">
-          <el-select
-            v-model="selectedFilter"
-            placeholder="Select Field"
-            style="width: 150px"
-            @change="resetSearchQuery"
-          >
-            <el-option label="Branch Code" value="BRANCH_CODE"></el-option>
-          </el-select>
-        </el-form-item> -->
       </div>
 
-      <!-- <el-button type="primary" style="margin-top: 20px" @click="openDialog">+ upload</el-button> -->
+      <el-button type="primary" style="margin-top: 20px" @click="openDialog">+ upload</el-button>
     </el-form>
 
     <!-- Table -->
@@ -80,7 +41,6 @@
       :max-height="800"
       :scroll-x="true"
     >
-      <!-- Dynamic Columns -->
       <el-table-column
         v-for="col in columns"
         :key="col.prop"
@@ -88,24 +48,21 @@
         :label="col.label"
         :width="col.width || 'auto'"
         :formatter="col.formatter || defaultFormatter"
-        :filters="col.prop === 'STATUS' ? statusFilters : null"
-        :filter-method="col.prop === 'STATUS' ? filterStatus : null"
       >
         <template #default="scope">
           <!-- Custom rendering for index -->
           <span v-if="col.prop === 'index'">{{ indexMethod(scope.$index) }}</span>
-          <!-- Custom rendering for STATUS -->
-          <el-tag
-            v-else-if="col.prop === 'STATUS'"
-            :type="scope.row.STATUS === 'N' ? 'primary' : 'danger'"
-          >
-            {{ scope.row.STATUS === 'N' ? 'Normal' : scope.row.STATUS === 'I' ? 'Inactive' : 'Unknown' }}
-          </el-tag>
         </template>
       </el-table-column>
-      <el-table-column fixed="right" label="Action" min-width="60">
+      <el-table-column fixed="right" label="Action" width="150">
         <template #default="scope">
-          <el-button :icon="Edit" circle type="primary" @click="handleEdit(scope.row)"></el-button>
+          <el-button :icon="View" circle type="primary" @click="handleView(scope.row)"></el-button>
+          <el-button
+            :icon="Delete"
+            circle
+            type="danger"
+            @click="handleDelete(scope.row)"
+          ></el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -124,9 +81,7 @@
     <!-- Dialog for New Bonus -->
     <el-dialog v-model="isDialogVisible" width="600px" @close="closeDialog">
       <template #header>
-        <h2 class="dialog-title">
-          {{ isEditMode ? 'Edit Other Bonus' : 'Upload Other Bonus' }}
-        </h2>
+        <h2 class="dialog-title">Upload Other Bonus</h2>
       </template>
 
       <el-form label-width="120px">
@@ -137,17 +92,16 @@
             format="YYYYMM"
             value-format="YYYYMM"
             placeholder="Choose a month"
-            :disabled="isEditMode"
           />
         </el-form-item>
 
-        <el-form-item label="Form" v-if="!isEditMode">
+        <el-form-item label="Form">
           <el-button plain type="success" @click="downloadFormExcel" :loading="loading">
             <el-icon><Download /></el-icon>&nbsp;Excel
           </el-button>
         </el-form-item>
 
-        <el-form-item label="Upload Excel" v-if="!isEditMode">
+        <el-form-item label="Upload Excel">
           <el-upload
             drag
             accept=".xlsx, .xls"
@@ -163,51 +117,14 @@
           </el-upload>
         </el-form-item>
 
-        <el-form-item label="ACC NO" v-if="isEditMode">
-          <el-input
-            v-model="newBonus.ACC_NO"
-            placeholder="Enter acc no"
-            :disabled="isEditMode"
-          ></el-input>
-        </el-form-item>
-        <el-form-item label="Amount" v-if="isEditMode">
-          <el-input
-            v-model="newBonus.AMOUNT"
-            placeholder="Enter amount"
-            :formatter="(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
-            @input="validateAmount"
-            :disabled="isEditMode"
-          ></el-input>
-        </el-form-item>
-        <el-form-item label="Tax Amount" v-if="isEditMode">
-          <el-input
-            v-model="newBonus.TAX_AMOUNT"
-            placeholder="Enter tax"
-            :formatter="(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
-            @input="validateTaxAmount"
-            :disabled="isEditMode"
-          ></el-input>
-        </el-form-item>
         <el-form-item label="Bonus Describe">
-          <el-input
-            v-model="newBonus.BONUS_DESC"
-            placeholder="Enter bonus desc"
-            :disabled="isEditMode"
-          ></el-input>
-        </el-form-item>
-        <el-form-item label="Status" v-if="isEditMode">
-          <el-select v-model="updateStatus" placeholder="Select Status" style="width: 200px">
-            <el-option label="Inactive" value="I"></el-option>
-            <el-option label="Normal" value="N"></el-option>
-          </el-select>
+          <el-input v-model="newBonus.BONUS_DESC" placeholder="Enter bonus desc"></el-input>
         </el-form-item>
       </el-form>
 
       <template #footer>
         <el-button @click="closeDialog">Cancel</el-button>
-        <el-button type="primary" @click="submitBonus" :loading="loading">{{
-          isEditMode ? 'Update' : 'Upload'
-        }}</el-button>
+        <el-button type="primary" @click="submitBonus" :loading="loading"> Upload </el-button>
       </template>
     </el-dialog>
   </div>
@@ -217,7 +134,7 @@
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import * as XLSX from 'xlsx' // Import xlsx library
-import { ArrowLeft, ArrowRight, Download, Edit, UploadFilled } from '@element-plus/icons-vue'
+import { Close, Delete, Download, Edit, UploadFilled, View } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -225,11 +142,9 @@ const ApiUrl = import.meta.env.VITE_API_URL
 const route = useRoute()
 const router = useRouter()
 const monthFilter = ref('')
-// const selectedFilter = ref('BRANCH_CODE') // Default filter field
-const searchQuery = ref('')// Holds DEP code (e.g., "LVB010026")
-const nameAccountQuery = ref('')
+const selectedFilter = ref('STATUS') // Default filter field
+const searchQuery = ref('')
 const originalData = ref([])
-const branchData = ref([])// Holds DEPARTMENT array
 const currentPage = ref(1)
 const pageSize = ref(10)
 const isDialogVisible = ref(false)
@@ -241,8 +156,6 @@ const newBonus = ref({
   BONUS_DESC: '',
   USER_ID: '',
 })
-const isEditMode = ref(false) // New flag to track edit mode
-const updateStatus = ref(null)
 
 const loading = ref(false)
 const fileList = ref([]) // To store uploaded file list
@@ -251,56 +164,17 @@ const excelData = ref([])
 const nameUSER = ref('')
 const currentMonthTx = ref('')
 const columns = ref([]) // New reactive variable for dynamic columns
-// Define filter options for STATUS column
-const statusFilters = ref([
-  { text: 'Normal', value: 'N' },
-  { text: 'Inactive', value: 'I' },
-])
-
 
 onMounted(() => {
   currentMonth()
+  fetchData()
 
-  // Check for query parameters from overviewAll.vue
-  const queryMonth = route.query.MONTH_TX
-  const queryBonusDesc = route.query.BONUS_DESC
-  const queryNameUser = route.query.nameUSER
-
-  if (queryMonth) {
-    monthFilter.value = queryMonth
-    newBonus.value.MONTH_TX = queryMonth
-  }
-  if (queryBonusDesc) {
-    newBonus.value.BONUS_DESC = queryBonusDesc
-  }
-  if (queryNameUser) {
-    nameUSER.value = queryNameUser
-    newBonus.value.USER_ID = queryNameUser
-  } else {
-    nameUSER.value = route.query.nameUSER // Fallback to default route param
+  //get value params
+  nameUSER.value = route.query.nameUSER
+  if (nameUSER.value) {
     newBonus.value.USER_ID = nameUSER.value
   }
-  
-  fetchData()
-  fetchAllBranch()
 })
-
-// Computed properties for breadcrumb routes
-const homeRoute = computed(() => ({
-  path: '/',
-  query: {
-    nameUSER: nameUSER.value || route.query.nameUSER,
-  },
-}))
-// Back to Overview
-const goBackToOverview = () => {
-  router.push({
-    path: '/', // Navigate to overviewAll.vue
-    query: {
-      nameUSER: nameUSER.value || route.query.nameUSER, // Preserve nameUSER
-    },
-  })
-}
 
 //current month
 const currentMonth = () => {
@@ -317,16 +191,9 @@ const fetchData = async () => {
   try {
     const body = {
       MONTH_TX: monthFilter.value,
-      ACC_NO: '',
-      AMOUNT: '',
-      TAX_AMOUNT: '',
-      BONUS_DESC: newBonus.value.BONUS_DESC || '',
-      BRANCH_CODE: '',
-      EMP_DEP_ID: '',
-      USER_ID: nameUSER.value,
-      STATUS: '',
+      USER_ID: nameUSER.value || route.query.nameUSER,
     }
-    const response = await axios.post(ApiUrl + '/Procedure/SLR_OTHER_BONUS_READ', body, {
+    const response = await axios.post(ApiUrl + '/Procedure/SLR_OTHER_BONUS_LIST', body, {
       headers: {
         DB: 'SALARY',
         'Content-Type': 'application/json',
@@ -356,17 +223,7 @@ const setDynamicColumns = (data) => {
   const customLabels = {
     index: 'No.', // Custom name for the # column
     MONTH_TX: 'Month', // Custom name for MONTH_TX
-    ACC_NO: 'Account No.', // Custom name for ACC_NO
-    AMOUNT: 'Amount', // Custom name for AMOUNT
-    TAX_AMOUNT: 'Tax Amount', // Custom name for TAX_AMOUNT
     BONUS_DESC: 'Description', // Custom name for BONUS_DESC
-    BRANCH_CODE: 'Branch', // Custom name for BRANCH_CODE
-    EMP_FULLNAME: 'Full Name',
-    EMP_DEP_ID: 'Dept ID', // Custom name for EMP_DEP_ID
-    USER_ID: 'User', // Custom name for USER_ID
-    STATUS: 'Status', // Custom name for STATUS
-    CREATE_DATE: 'Created On', // Custom name for CREATE_DATE
-    BONUSTYPE: 'Bonus Category', // Custom name for BONUSTYPE
   }
 
   // Get all unique keys from the first object (or all objects if needed)
@@ -406,16 +263,6 @@ const formatLabel = (key) => {
 const getColumnWidth = (key) => {
   const widthMap = {
     MONTH_TX: '100',
-    ACC_NO: '150',
-    AMOUNT: '120',
-    TAX_AMOUNT: '120',
-    BONUS_DESC: '200',
-    BRANCH_CODE: '120',
-    EMP_DEP_ID: '120',
-    USER_ID: '120',
-    STATUS: '100',
-    CREATE_DATE: '150',
-    BONUSTYPE: '120',
   }
   return widthMap[key] || 'auto'
 }
@@ -423,7 +270,6 @@ const getColumnWidth = (key) => {
 // Helper to assign formatters based on key
 const getColumnFormatter = (key) => {
   if (key === 'MONTH_TX') return formatMonth
-  if (key === 'AMOUNT' || key === 'TAX_AMOUNT') return formatAmount
   return null // Default formatter will be applied if null
 }
 
@@ -434,50 +280,29 @@ const defaultFormatter = (row, column, cellValue) => {
 
 //handleMonthChange
 const handleMonthChange = async (value) => {
-  searchQuery.value = '' 
-  nameAccountQuery.value = ''
+//   searchQuery.value = ''
   monthFilter.value = value
   await fetchData()
 }
-// New reset function for searchQuery only
-const resetSearchQuery = () => {
-  searchQuery.value = ''
+const handleSearchChange = () => {
+  // No need to reset anything; filtering happens in filteredData
 }
 // filteredData
-// Filtered data (updated to map DEP code to DEP_NAME)
 const filteredData = computed(() => {
   let filtered = originalData.value.filter((item) => {
     if (!monthFilter.value) return true
     return String(item.MONTH_TX) === monthFilter.value
   })
 
-  // Apply branch code filter
-  // if (searchQuery.value && selectedFilter.value === 'BRANCH_CODE') {
-  if (searchQuery.value) {
-    // Find the DEP_NAME corresponding to the selected DEP code
-    const selectedBranch = branchData.value.find(
-      (branch) => branch.DEP === searchQuery.value
+  if (!searchQuery.value) return filtered
+
+  const query = searchQuery.value.toLowerCase()
+  return filtered.filter((item) => {
+    return (
+      String(item.MONTH_TX).toLowerCase().includes(query) ||
+      (item.BONUS_DESC && String(item.BONUS_DESC).toLowerCase().includes(query))
     )
-    const depName = selectedBranch ? selectedBranch.DEP_NAME : null
-    if (depName) {
-      filtered = filtered.filter((item) => {
-        return item.DEP === depName // Match DEP (name) in data with DEP_NAME from branchData
-      })
-    }
-  }
-
-  // Apply name/account filter
-  if (nameAccountQuery.value) {
-    const query = nameAccountQuery.value.toLowerCase()
-    filtered = filtered.filter((item) => {
-      return (
-        (item.EMP_FULLNAME && String(item.EMP_FULLNAME).toLowerCase().includes(query)) ||
-        (item.ACC_NO && String(item.ACC_NO).toLowerCase().includes(query))
-      )
-    })
-  }
-
-  return filtered
+  })
 })
 
 //pagination
@@ -498,35 +323,7 @@ const handleSizeChange = (size) => {
 const indexMethod = (index) => {
   return (currentPage.value - 1) * pageSize.value + index + 1
 }
-//fetch All branch
-const fetchAllBranch = async () => {
-  try {
-    const body = {
-      BRANCH_CODE: '',
-    }
-    const response = await axios.post(ApiUrl + '/Procedure/BRANCH_READ', body, {
-      headers: {
-        DB: 'SALARY',
-        'Content-Type': 'application/json',
-      },
-    })
-    // console.log('branch', response)
 
-    if (response.data.HEADER.ERROR_CODE === '00') {
-      branchData.value = response.data.BODY[0].DEPARTMENT
-    } else branchData.value = []
-  } catch (error) {
-    console.error('Error fetching branch:', error)
-  }
-}
-
-// Formattera number
-const formatAmount = (row, column, cellValue) => {
-  if (cellValue === '0' || !cellValue) {
-    return '-' // Return dash if AMOUNT is '0' or 0
-  }
-  return cellValue ? new Intl.NumberFormat().format(cellValue) : ''
-}
 const formatMonth = (row, column, cellValue) => {
   if (cellValue) {
     const year = cellValue.slice(0, 4)
@@ -537,14 +334,10 @@ const formatMonth = (row, column, cellValue) => {
 }
 // Open and Close Dialog
 const openDialog = () => {
-  isEditMode.value = false
   isDialogVisible.value = true
-  updateStatus.value = null
 }
 const closeDialog = () => {
   isDialogVisible.value = false
-  isEditMode.value = false
-  updateStatus.value = null
   fileList.value = [] // Reset file list
   excelData.value = [] // Reset Excel data
   newBonus.value = {
@@ -559,78 +352,54 @@ const closeDialog = () => {
 // Submit Bonus
 const submitBonus = async () => {
   // Show confirmation popup
-  await ElMessageBox.confirm(
-    isEditMode.value
-      ? 'Are you sure you want to update the bonus form?'
-      : 'Are you sure you want to Upload the bonus form?',
-    isEditMode.value ? 'Confirm Update' : 'Confirm Upload',
-    {
-      confirmButtonText: 'Yes',
-      cancelButtonText: 'No',
-      type: 'warning',
-    },
-  )
+  await ElMessageBox.confirm('Are you sure you want to Upload the bonus form?', 'Confirm Upload', {
+    confirmButtonText: 'Yes',
+    cancelButtonText: 'No',
+    type: 'warning',
+  })
   loading.value = true
   try {
-    // Handle edit mode as before
-    if (isEditMode.value) {
-      const endpoint = '/Procedure/SLR_OTHER_BONUS_UPDATE'
-      newBonus.value.STATUS = updateStatus.value
-      const response = await axios.post(ApiUrl + endpoint, newBonus.value, {
-        headers: { DB: 'SALARY', 'Content-Type': 'application/json' },
-      })
-
-      if (response.data.HEADER.ERROR_CODE === '00') {
-        await fetchData()
-        monthFilter.value = newBonus.value.MONTH_TX
-        await handleMonthChange(newBonus.value.MONTH_TX)
-        closeDialog()
-        ElMessage.success('updated success!')
-      } else ElMessage.success(response.data.HEADER.ERROR_DESC)
-    }
     // Handle create mode with Excel data
+    if (!newBonus.value.MONTH_TX || excelData.value.length === 0) {
+      ElMessage.error('Month and File are required')
+      return
+    }
+    // console.log('exceldata=', excelData.value.length)
     else {
-      if (!newBonus.value.MONTH_TX || excelData.value.length === 0) {
-        ElMessage.error('Month and File are required')
-        return
-      }
-      // console.log('exceldata=', excelData.value.length)
-      else {
-        // Loop through Excel data and submit each row
-        const endpoint = '/Procedure/SLR_OTHER_BONUS_CREATE'
-        for (const row of excelData.value) {
-          const bonusData = {
-            MONTH_TX: newBonus.value.MONTH_TX,
-            ACC_NO: String(row.EMP_ACCOUNT_LAK),
-            AMOUNT: row.AMOUNT || '0',
-            TAX_AMOUNT: row.TAX_AMOUNT || '0',
-            BONUS_DESC: newBonus.value.BONUS_DESC,
-            USER_ID: newBonus.value.USER_ID,
-          }
-          // console.log('bodycreate=', bonusData)
-          try {
-            const response = await axios.post(ApiUrl + endpoint, bonusData, {
-              headers: { DB: 'SALARY', 'Content-Type': 'application/json' },
-            })
-
-            if (response.data.HEADER.ERROR_CODE === '00') {
-              ElMessage.success('upload success')
-            } else if (response.data.HEADER.ERROR_CODE !== '00') {
-              ElMessage.error(response.data.HEADER.ERROR_DESC)
-            } else ElMessage.error(response.data.HEADER.ERROR_DESC)
-          } catch (error) {
-            console.error(`Error submitting bonus for:`, error)
-          }
+      // Loop through Excel data and submit each row
+      const endpoint = '/Procedure/SLR_OTHER_BONUS_CREATE'
+      for (const row of excelData.value) {
+        const bonusData = {
+          MONTH_TX: newBonus.value.MONTH_TX,
+          ACC_NO: String(row.EMP_ACCOUNT_LAK),
+          AMOUNT: row.AMOUNT || '0',
+          TAX_AMOUNT: row.TAX_AMOUNT || '0',
+          BONUS_DESC: newBonus.value.BONUS_DESC,
+          USER_ID: newBonus.value.USER_ID,
         }
-        // Refresh data and close dialog after all submissions
-        await fetchData()
-        monthFilter.value = newBonus.value.MONTH_TX
-        await handleMonthChange(newBonus.value.MONTH_TX)
-        closeDialog()
+        // console.log('bodycreate=', bonusData)
+        try {
+          const response = await axios.post(ApiUrl + endpoint, bonusData, {
+            headers: { DB: 'SALARY', 'Content-Type': 'application/json' },
+          })
+
+          if (response.data.HEADER.ERROR_CODE === '00') {
+            ElMessage.success('upload success')
+          } else if (response.data.HEADER.ERROR_CODE !== '00') {
+            ElMessage.error(response.data.HEADER.ERROR_DESC)
+          } else ElMessage.error(response.data.HEADER.ERROR_DESC)
+        } catch (error) {
+          console.error(`Error submitting bonus for:`, error)
+        }
       }
+      // Refresh data and close dialog after all submissions
+      await fetchData()
+      monthFilter.value = newBonus.value.MONTH_TX
+      await handleMonthChange(newBonus.value.MONTH_TX)
+      closeDialog()
     }
   } catch (error) {
-    console.error(`Error ${isEditMode.value ? 'updating' : 'uploading'} bonus:`, error)
+    console.error(`Error uploading} bonus:`, error)
     if (error === 'cancel') {
       ElMessage.info('upload canceled')
     } else {
@@ -641,32 +410,66 @@ const submitBonus = async () => {
     loading.value = false
   }
 }
-//format only  number
-const validateAmount = (value) => {
-  // Allow only numbers and decimals
-  newBonus.value.AMOUNT = value.replace(/[^0-9.]/g, '')
+// Handle View
+const handleView = (row) => {
+  router.push({
+    path: '/home',
+    query: {
+      MONTH_TX: row.MONTH_TX,
+      BONUS_DESC: row.BONUS_DESC,
+      nameUSER: nameUSER.value || route.query.nameUSER,
+    },
+  })
 }
-const validateTaxAmount = (value) => {
-  // Allow only numbers and decimals
-  newBonus.value.TAX_AMOUNT = value.replace(/[^0-9.]/g, '')
-}
-const handleEdit = (row) => {
-  isEditMode.value = true
-  isDialogVisible.value = true
-  // console.log('edit', row)
+//remove bonus
+const handleDelete = async (row) => {
+  try {
+    // Show confirmation popup before deletion
+    await ElMessageBox.confirm(
+      `Are you sure you want to delete the bonus for ${row.MONTH_TX} - ${row.BONUS_DESC}?`,
+      'Confirm Deletion',
+      {
+        confirmButtonText: 'Yes',
+        cancelButtonText: 'No',
+        type: 'warning',
+      },
+    )
 
-  // Populate newBonus with the row data
-  newBonus.value = {
-    MONTH_TX: row.MONTH_TX,
-    ACC_NO: row.ACC_NO,
-    AMOUNT: row.AMOUNT,
-    TAX_AMOUNT: row.TAX_AMOUNT,
-    BONUS_DESC: row.BONUS_DESC,
-    USER_ID: row.USER_ID,
-    // STATUS: row.STATUS,
-    // Add any other fields that might be needed for editing
+    loading.value = true
+
+    // Prepare the request body based on the row data
+    const body = {
+      MONTH_TX: row.MONTH_TX,
+      BONUS_DESC: row.BONUS_DESC,
+      USER_ID: nameUSER.value || route.query.nameUSER, // Use the current user's ID
+    }
+
+    // API call to delete the bonus
+    const response = await axios.post(ApiUrl + '/Procedure/SLR_OTHER_BONUS_DELETE', body, {
+      headers: {
+        DB: 'SALARY',
+        'Content-Type': 'application/json',
+      },
+    })
+
+    // Check API response
+    if (response.data.HEADER.ERROR_CODE === '00') {
+      ElMessage.success('Bonus deleted successfully!')
+      // Refresh the table data after deletion
+      await fetchData()
+    } else {
+      ElMessage.error(response.data.HEADER.ERROR_DESC || 'Failed to delete bonus')
+    }
+  } catch (error) {
+    if (error === 'cancel') {
+      ElMessage.info('Deletion canceled')
+    } else {
+      console.error('Error deleting bonus:', error)
+      ElMessage.error('Error deleting bonus')
+    }
+  } finally {
+    loading.value = false
   }
-  updateStatus.value = row.STATUS
 }
 
 // Add new method to handle file upload
@@ -756,16 +559,11 @@ const downloadFormExcel = async () => {
       ElMessage.info('Download canceled')
     } else {
       console.error('Error downloading form:', error)
-      ElMessage.error('Error downloading form', error)
+      ElMessage.error('Error downloading form')
     }
   } finally {
     loading.value = false
   }
-}
-
-// Filter method for STATUS column
-const filterStatus = (value, row) => {
-  return row.STATUS === value
 }
 </script>
 
